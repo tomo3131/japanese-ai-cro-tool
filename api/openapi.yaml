@@ -1,0 +1,1141 @@
+openapi: 3.0.0
+info:
+  title: Japanese AI CRO Tool API
+  description: |
+    日本語特化AI-CROツールのREST API仕様書
+    
+    ## 認証
+    
+    すべてのAPIエンドポイントは認証が必要です。以下の2つの認証方法をサポートしています：
+    
+    1. **Bearer Token認証**（ダッシュボード用）
+       - Supabase Authで発行されたJWTトークンを使用
+       - `Authorization: Bearer <token>` ヘッダーに含める
+    
+    2. **APIキー認証**（プログラマティックアクセス用）
+       - `X-API-Key: <api_key>` ヘッダーに含める
+    
+    ## レート制限
+    
+    プラン別のレート制限：
+    - **Starter**: 100リクエスト/時間
+    - **Professional**: 1,000リクエスト/時間
+    - **Enterprise**: 10,000リクエスト/時間
+    
+    レート制限を超えた場合、`429 Too Many Requests` が返されます。
+    
+    ## エラーレスポンス
+    
+    すべてのエラーレスポンスは以下の形式で返されます：
+    
+    ```json
+    {
+      "error": "ErrorName",
+      "code": 1001,
+      "message": "エラーメッセージ",
+      "details": {}
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: api@example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://api-staging.example.com/v1
+    description: Staging server
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+tags:
+  - name: Authentication
+    description: 認証関連
+  - name: Organizations
+    description: 組織管理
+  - name: Sites
+    description: サイト管理
+  - name: Personalization
+    description: パーソナライゼーション
+  - name: Experiments
+    description: A/Bテスト・実験
+  - name: Analytics
+    description: 分析・レポート
+  - name: AI
+    description: AI機能
+
+paths:
+  # ============================================================
+  # Authentication
+  # ============================================================
+  
+  /auth/signup:
+    post:
+      tags: [Authentication]
+      summary: ユーザー登録
+      description: 新しいユーザーアカウントを作成します
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: SecurePass123!
+                organizationName:
+                  type: string
+                  example: 株式会社サンプル
+      responses:
+        '201':
+          description: ユーザー登録成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: 確認メールを送信しました
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: ログイン
+      description: メールアドレスとパスワードでログインします
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  expiresIn:
+                    type: integer
+                    example: 3600
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  
+  # ============================================================
+  # Sites
+  # ============================================================
+  
+  /sites:
+    get:
+      tags: [Sites]
+      summary: サイト一覧取得
+      description: 自分の組織のサイト一覧を取得します
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: サイト一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Site'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    
+    post:
+      tags: [Sites]
+      summary: サイト作成
+      description: 新しいサイトを作成します（Admin以上）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - domain
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  example: キャンペーンLP
+                domain:
+                  type: string
+                  example: example.com
+                industry:
+                  type: string
+                  enum: [ec, btob_saas, finance, media, other]
+                  example: ec
+                targetAge:
+                  type: string
+                  enum: [young, general, senior]
+                  example: general
+      responses:
+        '201':
+          description: サイト作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  
+  /sites/{siteId}:
+    get:
+      tags: [Sites]
+      summary: サイト詳細取得
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: サイト詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    patch:
+      tags: [Sites]
+      summary: サイト更新
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, paused, archived]
+      responses:
+        '200':
+          description: サイト更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      tags: [Sites]
+      summary: サイト削除
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '204':
+          description: サイト削除成功
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  # ============================================================
+  # Personalization
+  # ============================================================
+  
+  /personalization/rules:
+    get:
+      tags: [Personalization]
+      summary: パーソナライゼーションルール一覧取得
+      parameters:
+        - $ref: '#/components/parameters/SiteIdQuery'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, paused, archived]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: ルール一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonalizationRule'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+    
+    post:
+      tags: [Personalization]
+      summary: パーソナライゼーションルール作成
+      description: 新しいパーソナライゼーションルールを作成します（Editor以上）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - siteId
+                - name
+                - urlPattern
+                - conditions
+                - changes
+              properties:
+                siteId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  example: 広告経由訪問者向け特別オファー
+                description:
+                  type: string
+                urlPattern:
+                  type: string
+                  example: /lp/campaign
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [utm_source, utm_medium, device, country, referrer]
+                      operator:
+                        type: string
+                        enum: [equals, contains, starts_with, in]
+                      value:
+                        oneOf:
+                          - type: string
+                          - type: array
+                  example:
+                    - type: utm_source
+                      operator: equals
+                      value: google
+                changes:
+                  type: object
+                  example:
+                    headline: 特別キャンペーン実施中！
+                    ctaText: 今すぐ申し込む
+                    ctaColor: "#FF6B6B"
+                priority:
+                  type: integer
+                  default: 0
+      responses:
+        '201':
+          description: ルール作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizationRule'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  
+  /personalization/rules/{ruleId}:
+    get:
+      tags: [Personalization]
+      summary: パーソナライゼーションルール詳細取得
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      responses:
+        '200':
+          description: ルール詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizationRule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    patch:
+      tags: [Personalization]
+      summary: パーソナライゼーションルール更新
+      parameters:
+        - $ref: '#/components/parameters/RuleId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum: [draft, active, paused, archived]
+                changes:
+                  type: object
+      responses:
+        '200':
+          description: ルール更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalizationRule'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  # ============================================================
+  # Experiments
+  # ============================================================
+  
+  /experiments:
+    get:
+      tags: [Experiments]
+      summary: 実験一覧取得
+      parameters:
+        - $ref: '#/components/parameters/SiteIdQuery'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, running, paused, completed, archived]
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 実験一覧
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Experiment'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+    
+    post:
+      tags: [Experiments]
+      summary: 実験作成
+      description: 新しいA/Bテスト実験を作成します（Editor以上）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - siteId
+                - name
+                - hypothesis
+                - urlPattern
+                - variants
+              properties:
+                siteId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  example: CTAボタンの色テスト
+                hypothesis:
+                  type: string
+                  example: 緑色のボタンは青色よりもクリック率が高い
+                description:
+                  type: string
+                urlPattern:
+                  type: string
+                  example: /lp/campaign
+                goalMetric:
+                  type: string
+                  enum: [conversion, click, engagement, revenue]
+                  default: conversion
+                trafficAllocation:
+                  type: object
+                  properties:
+                    control:
+                      type: integer
+                      example: 50
+                    variant:
+                      type: integer
+                      example: 50
+                variants:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                        example: バリアントA
+                      description:
+                        type: string
+                      isControl:
+                        type: boolean
+                        default: false
+                      changes:
+                        type: object
+                        example:
+                          buttonColor: "#4CAF50"
+      responses:
+        '201':
+          description: 実験作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  
+  /experiments/{experimentId}:
+    get:
+      tags: [Experiments]
+      summary: 実験詳細取得
+      parameters:
+        - $ref: '#/components/parameters/ExperimentId'
+      responses:
+        '200':
+          description: 実験詳細
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    patch:
+      tags: [Experiments]
+      summary: 実験更新
+      parameters:
+        - $ref: '#/components/parameters/ExperimentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                status:
+                  type: string
+                  enum: [draft, running, paused, completed, archived]
+      responses:
+        '200':
+          description: 実験更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  /experiments/{experimentId}/start:
+    post:
+      tags: [Experiments]
+      summary: 実験開始
+      parameters:
+        - $ref: '#/components/parameters/ExperimentId'
+      responses:
+        '200':
+          description: 実験開始成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  
+  /experiments/{experimentId}/stop:
+    post:
+      tags: [Experiments]
+      summary: 実験停止
+      parameters:
+        - $ref: '#/components/parameters/ExperimentId'
+      responses:
+        '200':
+          description: 実験停止成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  
+  /experiments/{experimentId}/results:
+    get:
+      tags: [Experiments]
+      summary: 実験結果取得
+      parameters:
+        - $ref: '#/components/parameters/ExperimentId'
+      responses:
+        '200':
+          description: 実験結果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentResults'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  
+  # ============================================================
+  # Analytics
+  # ============================================================
+  
+  /analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: 概要統計取得
+      parameters:
+        - $ref: '#/components/parameters/SiteIdQuery'
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 概要統計
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  visitors:
+                    type: integer
+                  sessions:
+                    type: integer
+                  pageviews:
+                    type: integer
+                  conversions:
+                    type: integer
+                  conversionRate:
+                    type: number
+                    format: float
+                  avgSessionDuration:
+                    type: integer
+  
+  /analytics/events:
+    post:
+      tags: [Analytics]
+      summary: イベント送信
+      description: トラッキングSDKからイベントを送信します
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - siteId
+                - visitorId
+                - sessionId
+                - eventType
+                - url
+              properties:
+                siteId:
+                  type: string
+                  format: uuid
+                visitorId:
+                  type: string
+                sessionId:
+                  type: string
+                eventType:
+                  type: string
+                  enum: [pageview, click, conversion, custom]
+                eventName:
+                  type: string
+                eventData:
+                  type: object
+                url:
+                  type: string
+                referrer:
+                  type: string
+                userAgent:
+                  type: string
+                experimentId:
+                  type: string
+                  format: uuid
+                variantId:
+                  type: string
+                  format: uuid
+      responses:
+        '202':
+          description: イベント受付成功
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  
+  # ============================================================
+  # AI
+  # ============================================================
+  
+  /ai/hypotheses:
+    post:
+      tags: [AI]
+      summary: AI仮説生成
+      description: AIが改善仮説を生成します（Professional以上）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - siteId
+                - url
+              properties:
+                siteId:
+                  type: string
+                  format: uuid
+                url:
+                  type: string
+                  example: https://example.com/lp/campaign
+                context:
+                  type: object
+                  properties:
+                    currentCVR:
+                      type: number
+                    industry:
+                      type: string
+                    targetAge:
+                      type: string
+      responses:
+        '200':
+          description: 仮説生成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hypotheses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AIHypothesis'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+# ============================================================
+# Components
+# ============================================================
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    
+    SiteIdQuery:
+      name: siteId
+      in: query
+      schema:
+        type: string
+        format: uuid
+    
+    RuleId:
+      name: ruleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    
+    ExperimentId:
+      name: experimentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        createdAt:
+          type: string
+          format: date-time
+    
+    Site:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        organizationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        domain:
+          type: string
+        industry:
+          type: string
+        targetAge:
+          type: string
+        trackingId:
+          type: string
+        trackingVerified:
+          type: boolean
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    PersonalizationRule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        urlPattern:
+          type: string
+        conditions:
+          type: array
+          items:
+            type: object
+        changes:
+          type: object
+        priority:
+          type: integer
+        status:
+          type: string
+        impressions:
+          type: integer
+        conversions:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Experiment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hypothesis:
+          type: string
+        status:
+          type: string
+        urlPattern:
+          type: string
+        goalMetric:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    ExperimentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Experiment'
+        - type: object
+          properties:
+            variants:
+              type: array
+              items:
+                $ref: '#/components/schemas/Variant'
+    
+    Variant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        experimentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        isControl:
+          type: boolean
+        changes:
+          type: object
+        trafficPercentage:
+          type: integer
+        visitors:
+          type: integer
+        conversions:
+          type: integer
+        conversionRate:
+          type: number
+          format: float
+    
+    ExperimentResults:
+      type: object
+      properties:
+        experimentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              variantId:
+                type: string
+                format: uuid
+              name:
+                type: string
+              visitors:
+                type: integer
+              conversions:
+                type: integer
+              conversionRate:
+                type: number
+              confidenceInterval:
+                type: object
+                properties:
+                  lower:
+                    type: number
+                  upper:
+                    type: number
+        statistics:
+          type: object
+          properties:
+            pValue:
+              type: number
+            confidenceLevel:
+              type: number
+            improvementRate:
+              type: number
+            significant:
+              type: boolean
+            winnerVariantId:
+              type: string
+              format: uuid
+        aiInsights:
+          type: string
+    
+    AIHypothesis:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        changeType:
+          type: string
+        targetElement:
+          type: string
+        currentValue:
+          type: string
+        suggestedValue:
+          type: string
+        rationale:
+          type: string
+        expectedImprovement:
+          type: number
+        priorityScore:
+          type: integer
+        implementationDifficulty:
+          type: string
+    
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: integer
+        message:
+          type: string
+        details:
+          type: object
+  
+  responses:
+    BadRequest:
+      description: リクエストが不正です
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "ValidationError"
+            code: 3000
+            message: "入力内容に誤りがあります"
+            details:
+              fields:
+                - field: "email"
+                  message: "有効なメールアドレスを入力してください"
+    
+    Unauthorized:
+      description: 認証が必要です
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Unauthorized"
+            code: 1000
+            message: "認証が必要です"
+    
+    Forbidden:
+      description: この操作を実行する権限がありません
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Forbidden"
+            code: 2000
+            message: "この操作を実行する権限がありません"
+    
+    NotFound:
+      description: 指定されたリソースが見つかりません
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "NotFound"
+            code: 4000
+            message: "指定されたリソースが見つかりません"
+
